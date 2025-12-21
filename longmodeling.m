@@ -1,4 +1,4 @@
-% Центр: виправлений скрипт з реалістичним рухом і моделлю батареї
+% Центр: скрипт з реалістичним рухом і довгим часом очікування
 
 clearvars -except simData1 simData2 simpleMap goalLoc
 close all
@@ -47,8 +47,8 @@ rectangle('Position',[goalLoc(1)-zoneHalf, goalLoc(2)-zoneHalf, 2*zoneHalf, 2*zo
 light('Position',[10 10 10],'Style','infinite'); lighting gouraud; material shiny
 
 % --- Параметри часу/логіки ---
-framesPerSec = 10;    % крок у кадрах (у тебе 10 кадрів = 1 сек)
-decisionWindow = 150;  % 5сек
+framesPerSec = 10;    % крок у кадрах ( 10 кадрів = 1 сек)
+decisionWindow = 150;  % 15сек
 secondDelay = 50; % секунд після DONE для delayed release
 
 % --- Траєкторії з Simulink (очікується, що simData1/2 існують) ---
@@ -88,13 +88,11 @@ hTrail2 = plot(pose2(1,1), pose2(1,2), '-r', 'LineWidth', 1.5);
 hText1 = text(0,0,'','FontSize',9,'Color','k');
 hText2 = text(0,0,'','FontSize',9,'Color','k');
 
-% підготовка STL (як було у тебе)
+% підготовка STL 
 hasSTL = true;
 try fv = stlread('groundvehicle.stl'); catch; fv = []; hasSTL=false; end
-% ----------------------------
-% Обробка STL (читання → нормалізація → fallback)
-% ----------------------------
-% Вхід: fv (може бути struct або cell або порожній)
+
+% Вхід: fv 
 V = []; F = [];
 if hasSTL && ~isempty(fv)
     if isstruct(fv)
@@ -118,8 +116,6 @@ if hasSTL && ~isempty(fv)
             end
         end
     elseif iscell(fv) && numel(fv) >= 2
-        % stlread може повернути {F,V} або {V,F} залежно від реалізації
-        % Спробуємо угадати: якщо перший має 3 колонки — приймаємо як V
         try
             A = double(fv{1});
             B = double(fv{2});
@@ -163,7 +159,7 @@ end
 
 % Якщо не вдалося прочитати STL — застосувати fallback box-модель
 if isempty(V) || isempty(F)
-    warning('Не вдалося прочитати groundvehicle.stl — застосовано fallback box-модель.');
+    %warning('Не вдалося прочитати groundvehicle.stl — застосовано fallback box-модель.');
     w = 0.7; l = 1.2; h = 0.4;
     V = [ -l/2 -w/2 0;
            -l/2  w/2 0;
@@ -179,10 +175,10 @@ end
 % Центруємо і масштабуємо модель
 V = double(V);
 V = V - mean(V,1);
-scaleSTL = 0.6; % підлаштуй якщо треба
+scaleSTL = 0.6; 
 V = V * scaleSTL;
 
-% Якщо вершини лежать на нулі Z — піднімаємо трохи, щоб не "вкопувалось"
+
 zMin = min(V(:,3));
 if abs(zMin) < 1e-6
     V = V + repmat([0 0 0.02], size(V,1),1);
@@ -195,10 +191,6 @@ agent2_patch = patch('Faces',F,'Vertices',V,'FaceColor',[0.8 0.1 0.1], ...
     'EdgeColor','none','FaceLighting','gouraud','FaceAlpha',1);
 
 
-% Для стислості припустимо відтворено блок, який встановлює V,F та agent_patch
-% (копіюй сюди свій код обробки stl: нормалізація F/V, fallback box, scaleSTL тощо)
-% Після цього створюємо agent1_patch та agent2_patch (як у твоєму коді).
-
 % ------------------------------
 % ГОЛОВНИЙ ЦИКЛ
 centerWaitingLogged = false;
@@ -210,7 +202,7 @@ while ~(agent1_done && agent2_done) && timeSec < maxSimTime
     % ----------------- AGENT 1 -----------------
     % Оновлення індексу (якщо дозволено)
     if agent1_allowed && idx1 < nFrames1
-        % крок вперед: рухаємося на framesPerSec кадрів (щоб відповідати твоєму timestep)
+        % крок вперед: рухаємося на framesPerSec кадрів (щоб відповідати timestep)
         idx1 = min(nFrames1, idx1 + framesPerSec);
     end
     
@@ -234,7 +226,7 @@ while ~(agent1_done && agent2_done) && timeSec < maxSimTime
     % Оновлення графіки для агента 1
     set(hTrail1, 'XData', pose1(1:idx1,1), 'YData', pose1(1:idx1,2));
     set(hText1, 'Position', [cur1(1)+0.3, cur1(2)], 'String', sprintf('A1 %.0f%%', battery1));
-    % оновлення patch'а (як у тебе)
+    % оновлення patch'а 
     theta1 = cur1(3);
     Rz1 = [cos(theta1) -sin(theta1) 0; sin(theta1) cos(theta1) 0; 0 0 1];
     newV1 = (Rz1 * (V)')' + repmat([cur1(1) cur1(2) 0], size(V,1), 1);
@@ -247,6 +239,7 @@ while ~(agent1_done && agent2_done) && timeSec < maxSimTime
         agent1_allowed = false;
         agent1_zone_time = timeSec;
         fprintf('[%2ds] ○ Агент 1 увійшов у зону. Запит на координацію надіслано.\n', timeSec);
+        fprintf('[%2ds] ○ Центр: очікує ще запити...\n', timeSec);
     end
    if idx1 >= nFrames1 && ~agent1_done
     agent1_done = true;
@@ -293,26 +286,21 @@ end
         agent2_waiting = true;
         agent2_allowed = false;
         agent2_zone_time = timeSec;
-        fprintf('[%2ds] ○ Агент 2 увійшов у зону. запит на координацію надіслано.\n', timeSec);
+        fprintf('[%2ds] ○ Агент 2 увійшов у зону. Запит на координацію надіслано.\n', timeSec);
+        fprintf('[%2ds] ○ Центр: очікує ще запити...\n', timeSec);
     end
     if idx2 >= nFrames2 && ~agent2_done
     agent2_done = true;
     agent2_allowed = false;
     agent2_waiting = false;
     agent2_arrival_time = timeSec;
-    
+    fprintf('[%2ds] ○ Агент 2 досяг док-станції.\n', timeSec);
     % Якщо агент 1 чекає — встановлюємо час delayed release
     if agent1_waiting && ~agent1_released
         agent1_release_time = agent2_arrival_time + secondDelay;
     end
-end
-
+    end
     
-    % ----------------- LOGІКА ЦЕНТРА -----------------
-% Логіка центру
-
-
-% ----------------- LOGІКА ЦЕНТРА (оновлена) -----------------
 % ----------------- LOGІКА ЦЕНТРА (універсальна) -----------------
 agentsWaiting = [agent1_waiting, agent2_waiting];
 agentsZoneTime = [agent1_zone_time, agent2_zone_time];
@@ -339,7 +327,7 @@ if any(agentsWaiting)
             agent1_release_time = timeSec + decisionWindow; % другий чекає ще decisionWindow
             secondAgent = 1;
         end
-        fprintf('[%2ds] ○ Центр: Агент %d рухається, інший чекає нове decisionWindow\n', timeSec, chosenAgent);
+        fprintf('[%2ds] ○ Центр: Агент %d продовжує рух (інший очікує) \n', timeSec, chosenAgent);
         centerDecisionMade = true;
     end
 end
@@ -348,10 +336,10 @@ end
 if centerDecisionMade
     if secondAgent == 1 && ~agent1_released && timeSec >= agent1_release_time
         agent1_allowed = true; agent1_waiting = false; agent1_released = true;
-        fprintf('[%2ds] ○ Центр: delayed release — Агент 1 продовжує рух\n', timeSec);
+        fprintf('[%2ds] ○ Центр: Агент 1 продовжує рух\n', timeSec);
     elseif secondAgent == 2 && ~agent2_released && timeSec >= agent2_release_time
         agent2_allowed = true; agent2_waiting = false; agent2_released = true;
-        fprintf('[%2ds] ○ Центр: delayed release — Агент 2 продовжує рух\n', timeSec);
+        fprintf('[%2ds] ○ Центр: Агент 2 продовжує рух\n', timeSec);
     end
 end
 
