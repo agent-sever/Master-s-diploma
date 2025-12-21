@@ -7,7 +7,7 @@ goalLoc = [5 5];
 assignin('base', 'goalLoc', goalLoc);
 
 % --- Агент 1 ---
-startLoc = [9 9];  % старт
+startLoc = [9 9];  
 assignin('base', 'startLoc', startLoc);
 simData1 = sim('pathPlanning.slx');
 
