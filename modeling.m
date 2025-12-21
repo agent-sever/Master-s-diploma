@@ -1,9 +1,9 @@
-% Центр: виправлений скрипт з реалістичним рухом і моделлю батареї
+% Центр: скрипт з реалістичним рухом і моделлю батареї
 
 clearvars -except simData1 simData2 simpleMap goalLoc
 close all
 
-%% --- Параметри витрати енергії (після clearvars!) ---
+%% --- Параметри витрати енергії ---
 a = 0.5;      % постійна частина %/с (електроніка)
 b = 0.8;      % лінійний коефіцієнт від v
 c = 3;      % квадратичний коефіцієнт (аеродинаміка)
@@ -85,7 +85,7 @@ rectangle('Position',[goalLoc(1)-zoneHalf, goalLoc(2)-zoneHalf, 2*zoneHalf, 2*zo
 light('Position',[10 10 10],'Style','infinite'); lighting gouraud; material shiny
 
 % --- Параметри часу/логіки ---
-framesPerSec = 10;    % крок у кадрах (у тебе 10 кадрів = 1 сек)
+framesPerSec = 10;    % крок у кадрах (10 кадрів = 1 сек)
 decisionWindow = 50;  % 5сек
 
 
@@ -126,13 +126,12 @@ hTrail2 = plot(pose2(1,1), pose2(1,2), '-r', 'LineWidth', 1.5);
 hText1 = text(0,0,'','FontSize',9,'Color','k');
 hText2 = text(0,0,'','FontSize',9,'Color','k');
 
-% підготовка STL (як було у тебе)
+% підготовка STL 
 hasSTL = true;
 try fv = stlread('groundvehicle.stl'); catch; fv = []; hasSTL=false; end
-% ----------------------------
-% Обробка STL (читання → нормалізація → fallback)
-% ----------------------------
-% Вхід: fv (може бути struct або cell або порожній)
+
+
+% Вхід: fv 
 V = []; F = [];
 if hasSTL && ~isempty(fv)
     if isstruct(fv)
@@ -156,8 +155,6 @@ if hasSTL && ~isempty(fv)
             end
         end
     elseif iscell(fv) && numel(fv) >= 2
-        % stlread може повернути {F,V} або {V,F} залежно від реалізації
-        % Спробуємо угадати: якщо перший має 3 колонки — приймаємо як V
         try
             A = double(fv{1});
             B = double(fv{2});
@@ -172,7 +169,6 @@ if hasSTL && ~isempty(fv)
             V = []; F = [];
         end
     elseif isnumeric(fv) && size(fv,2)==3
-        % Рідкісний випадок — один масив вершин
         V = double(fv);
         F = [];
     end
@@ -201,7 +197,7 @@ end
 
 % Якщо не вдалося прочитати STL — застосувати fallback box-модель
 if isempty(V) || isempty(F)
-    warning('Не вдалося прочитати groundvehicle.stl — застосовано fallback box-модель.');
+    %warning('Не вдалося прочитати groundvehicle.stl — застосовано fallback box-модель.');
     w = 0.7; l = 1.2; h = 0.4;
     V = [ -l/2 -w/2 0;
            -l/2  w/2 0;
@@ -217,10 +213,9 @@ end
 % Центруємо і масштабуємо модель
 V = double(V);
 V = V - mean(V,1);
-scaleSTL = 0.6; % підлаштуй якщо треба
+scaleSTL = 0.6; 
 V = V * scaleSTL;
 
-% Якщо вершини лежать на нулі Z — піднімаємо трохи, щоб не "вкопувалось"
 zMin = min(V(:,3));
 if abs(zMin) < 1e-6
     V = V + repmat([0 0 0.02], size(V,1),1);
@@ -233,9 +228,6 @@ agent2_patch = patch('Faces',F,'Vertices',V,'FaceColor',[0.8 0.1 0.1], ...
     'EdgeColor','none','FaceLighting','gouraud','FaceAlpha',1);
 
 
-% Для стислості припустимо відтворено блок, який встановлює V,F та agent_patch
-% (копіюй сюди свій код обробки stl: нормалізація F/V, fallback box, scaleSTL тощо)
-% Після цього створюємо agent1_patch та agent2_patch (як у твоєму коді).
 
 % ------------------------------
 % ГОЛОВНИЙ ЦИКЛ
@@ -246,7 +238,7 @@ while ~(agent1_done && agent2_done) && timeSec < maxSimTime
     % ----------------- AGENT 1 -----------------
     % Оновлення індексу (якщо дозволено)
     if agent1_allowed && idx1 < nFrames1
-        % крок вперед: рухаємося на framesPerSec кадрів (щоб відповідати твоєму timestep)
+        % крок вперед: рухаємося на framesPerSec кадрів (щоб відповідати timestep)
         idx1 = min(nFrames1, idx1 + framesPerSec);
     end
     
@@ -270,7 +262,7 @@ while ~(agent1_done && agent2_done) && timeSec < maxSimTime
     % Оновлення графіки для агента 1
     set(hTrail1, 'XData', pose1(1:idx1,1), 'YData', pose1(1:idx1,2));
     set(hText1, 'Position', [cur1(1)+0.3, cur1(2)], 'String', sprintf('A1 %.0f%%', battery1));
-    % оновлення patch'а (як у тебе)
+    % оновлення patch'а 
     theta1 = cur1(3);
     Rz1 = [cos(theta1) -sin(theta1) 0; sin(theta1) cos(theta1) 0; 0 0 1];
     newV1 = (Rz1 * (V)')' + repmat([cur1(1) cur1(2) 0], size(V,1), 1);
@@ -283,6 +275,7 @@ while ~(agent1_done && agent2_done) && timeSec < maxSimTime
         agent1_allowed = false;
         agent1_zone_time = timeSec;
         fprintf('[%2ds] ○ Агент 1 увійшов у зону. Запит на координацію надіслано.\n', timeSec);
+        fprintf('[%2ds] ○ Центр: очікує ще запити...\n', timeSec);
     end
     if idx1 >= nFrames1 && ~agent1_done
         agent1_done = true;
@@ -327,6 +320,7 @@ while ~(agent1_done && agent2_done) && timeSec < maxSimTime
         agent2_allowed = false;
         agent2_zone_time = timeSec;
         fprintf('[%2ds] ○ Агент 2 увійшов у зону. запит на координацію надіслано.\n', timeSec);
+        fprintf('[%2ds] ○ Центр: очікує ще запити...\n', timeSec);
     end
     if idx2 >= nFrames2 && ~agent2_done
         agent2_done = true;
@@ -339,7 +333,7 @@ while ~(agent1_done && agent2_done) && timeSec < maxSimTime
         end
     end
     
-    % ----------------- LOGІКА ЦЕНТРА -----------------
+    % ----------------- LOGІК ЦЕНТР -----------------
 % прапорці для логів центру
 centerWaitingLogged = false;  % чи вже виведено "центр очікує"
 centerDecisionMade = false;   % чи вже прийнято рішення
